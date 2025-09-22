@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, Link, Form, usePage } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import { type BreadcrumbItem, type ParkingSpace } from '@/types';
-import PlaceholderPattern from '@/components/PlaceholderPattern.vue';
+// import PlaceholderPattern from '@/components/PlaceholderPattern.vue';
 import { LoaderCircle } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 
@@ -17,7 +17,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-const props = defineProps<{
+defineProps<{
     reserved_stalls?: ParkingSpace[][];
 }>();
 

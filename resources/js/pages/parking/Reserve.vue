@@ -2,7 +2,7 @@
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Form, Head, Link } from '@inertiajs/vue3';
-import { type BreadcrumbItem, ParkingSpace } from '@/types';
+import { type BreadcrumbItem } from '@/types';
 import { LoaderCircle } from 'lucide-vue-next';
 import { Card, CardContent, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';

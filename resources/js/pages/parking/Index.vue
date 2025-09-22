@@ -3,7 +3,6 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type ParkingSpace } from '@/types';
 import PlaceholderPattern from '../../components/PlaceholderPattern.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { ref } from 'vue';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {

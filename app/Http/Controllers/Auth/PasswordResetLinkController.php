@@ -34,9 +34,9 @@ class PasswordResetLinkController extends Controller
             'email' => 'required|email',
         ]);
 
-//        Password::sendResetLink(
-//            $request->only('email')
-//        );
+        Password::sendResetLink(
+            $request->only('email')
+        );
 
         Mail::to($request->get('email'))->send(
           new \App\Mail\ParkingAuth()

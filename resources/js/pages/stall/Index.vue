@@ -12,15 +12,16 @@ const processing = ref(false);
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Stall',
+        title: 'StallController',
         href: '/stall',
     },
 ];
 
-defineProps<{
+const props = defineProps<{
     reserved_stalls?: ParkingSpace[][];
 }>();
 
+console.log(props.reserved_stalls);
 </script>
 
 <template>

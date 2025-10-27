@@ -38,9 +38,9 @@ class PasswordResetLinkController extends Controller
             $request->only('email')
         );
 
-        Mail::to($request->get('email'))->send(
+        /*Mail::to($request->get('email'))->send(
           new \App\Mail\ParkingAuth()
-        );
+        );*/
 
         return back()->with('status', __('A reset link will be sent if the account exists.'));
     }

@@ -29,6 +29,7 @@ export interface User {
     id: number;
     name: string;
     email: string;
+    is_admin: boolean;
     avatar?: string;
     email_verified_at: string | null;
     created_at: string;
@@ -42,6 +43,30 @@ export interface ParkingSpace {
     registration_plate?: string | null;
     created_at: string;
     updated_at: string;
+}
+
+export interface Record {
+    id: number;
+    user_id: number;
+    user: User;
+    parking_space_id: number;
+    parking_space?: ParkingSpace;
+    registration_plates?: string | null;
+    action: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface RecordPagination {
+    current_page: number;
+    current_page_url: string;
+    data: Record[];
+    first_page_url: string;
+    from: number;
+    next_page_url: string | null;
+    path: string;
+    per_page: number;
+    prev_page_url: string | null;
 }
 
 export type BreadcrumbItemType = BreadcrumbItem;

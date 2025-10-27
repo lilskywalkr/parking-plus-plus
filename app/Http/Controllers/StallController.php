@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\OrderStatus;
+use App\Enums\OrderStatusEnum;
+use App\Enums\ParkingRecordActionEnum;
+use App\Events\ParkingActionRecorded;
+use App\Jobs\CreateOrderJob;
 use App\Mail\PaymentSucceeded;
 use App\Models\Order;
 use App\Models\ParkingSpace;
@@ -16,7 +19,7 @@ use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-class Stall extends Controller
+class StallController extends Controller
 {
     public function index() {
         $user_reserved_stalls = Auth::user()->parking_spaces;
@@ -36,72 +39,34 @@ class Stall extends Controller
 
     public function checkout(Request $request) {
         $request->validate([
-            'id' => ['nullable', 'integer']
+            'id' => ['nullable', 'integer', 'min:1'],
         ]);
 
         // Creating a stripe session
         $stripe = new \Stripe\StripeClient(env('STRIPE_SECRET_KEY'));
         $user_reserved_stalls = null;
 
-        // If the user wants to pay for a specific reserved parking stall
-        if ($request['id'] !== null) {
-            $user_reserved_stalls = ParkingSpace::where('id', $request['id'])->get(); // Get the specific reserved parking stall (as a collection)
-        } else {
-            // If the user wants to pay for all the reserved stalls
-            $user_reserved_stalls = Auth::user()->parking_spaces;
+        try {
+            // If the user wants to pay for a specific reserved parking stall
+            if ($request['id'] !== null) {
+                // Get the specific reserved parking stall (get it as a collection)
+                $user_reserved_stalls = ParkingSpace::where('id', $request['id'])->where('user_id', Auth::id())->get();
+            } else {
+                // If the user wants to pay for all the reserved stalls
+                $user_reserved_stalls = Auth::user()->parking_spaces;
+            }
+
+            // If the reserved stall(s) was/were not found in the database (e.g. the stall id was invalid)
+            if (!$user_reserved_stalls->count()) {
+                throw new NotFoundHttpException;
+            }
+        } catch (\Exception $e) {
+            throw new NotFoundHttpException;
         }
 
         $user_registration_plates = $user_reserved_stalls->select('registration_plates')->toJson(); // Selecting registered cars' registration plates
-        /*$user_orders = Auth::user()->orders->where('status', OrderStatus::UNPAID); // Getting user's unpaid orders
-        $unpaid_pending_order = $user_orders->where('registration_plates', $user_registration_plates)->first(); // Selecting the latest existing pending order
 
-        // If the order exists and is valid (the number of registered cars are the same as before)
-        if ($unpaid_pending_order) {
-            // Extracting registration plates from the array of js objects from the user's order
-            $plates = array();
-            foreach (json_decode($unpaid_pending_order['registration_plates']) as $registration_plate) {
-                $plates[] = $registration_plate->registration_plates;
-            }
-
-            // Extracting the drive_in records from the table based on registration plates into an array
-            $reserved_stalls_drive_in = ParkingSpace::whereIn('registration_plates', $plates)->pluck('drive_in')->toArray();
-            $new_total_price = 0;
-
-            // Calculating the new total price based on the drive in time of each parked car in the stall
-            array_map(function ($drive_in) use (&$new_total_price) {
-                $time_passed = Carbon::parse($drive_in)->diffInSeconds(now()); // Car's parked time in seconds
-
-                if ($time_passed <= 3_600 || ($time_passed > 10_800)) {
-                    $new_total_price += env('PARKING_STALL_PRICE_UP_TO_ONE_HOUR');
-                } else if ($time_passed > 3_600 && $time_passed <= 7_200) {
-                    $new_total_price += env('PARKING_STALL_PRICE_UP_TO_TWO_HOURS');
-                } else if ($time_passed > 7_200 && $time_passed <= 10_800) {
-                    $new_total_price += env('PARKING_STALL_PRICE_UP_TO_THREE_HOURS');
-                }
-            }, $reserved_stalls_drive_in);
-
-
-
-            $unpaid_pending_order['total_price'] = $new_total_price;
-            $unpaid_pending_order->save();
-
-            $session = $stripe->checkout->sessions->retrieve($unpaid_pending_order['session_id']);
-
-            try {
-                // If the session doesn't exist or has expired the throw an exception
-                if (!$session || $session->status === OrderStatus::EXPIRED) {
-                    throw new NotFoundHttpException();
-                }
-
-                $session->amount_total = $new_total_price * 100; // If it exists set the new total price
-            } catch (\Exception $e) {
-                throw new NotFoundHttpException;
-            }
-
-            return redirect( $session->url );
-        }*/
-
-        // If an unpaid pending order doesn't exist then create a new checkout session
+        // create a new checkout session
         $line_items = [];
         $total_price = 0;
 
@@ -145,14 +110,8 @@ class Stall extends Controller
             'cancel_url' => route('stall.checkout.cancel', [], true),
         ]);
 
-        // Creating a new order for the current checkout order unto the database
-        $order = new Order();
-        $order['status'] = OrderStatus::UNPAID;
-        $order['registration_plates'] = $user_registration_plates;
-        $order['total_price'] = $total_price;
-        $order['user_id'] = Auth::id();
-        $order['session_id'] = $checkout_session->id;
-        $order->save();
+        // Creating a new order for the current checkout order unto the database via a job (queue)
+        CreateOrderJob::dispatch($user_registration_plates, $total_price, $checkout_session->id, Auth::id());
 
         return redirect($checkout_session->url);
     }
@@ -170,7 +129,7 @@ class Stall extends Controller
             }
 
             // Getting the order which was not displayed on the success page for the user's payment summary
-            $order = Order::where('session_id', $session['id'])->where('payment_summarized', false)->first();
+            $order = Order::where('status', OrderStatusEnum::PAID)->where('session_id', $session['id'])->where('payment_summarized', false)->first();
             if (!$order) {
                 throw new NotFoundHttpException; // If the summary was displayed by the user then return an exception
             }
@@ -189,6 +148,20 @@ class Stall extends Controller
     }
 
     public function cancel(Request $request) {
+        $stripe = new \Stripe\StripeClient(env('STRIPE_SECRET_KEY'));
+
+        $session_id = $request->get('session_id');
+
+        try {
+            $session = $stripe->checkout->sessions->retrieve($session_id);
+
+            if (!$session) {
+                throw new NotFoundHttpException;
+            }
+        } catch (\Exception $e) {
+            throw new NotFoundHttpException;
+        }
+
         return Inertia::render('stall/CheckoutCancel', []);
     }
 
@@ -220,24 +193,35 @@ class Stall extends Controller
                         $charge = $stripe->charges->retrieve($charge_id, []); // Retrieving a specific charge object by id
 
                         // Getting the user's order which was paid but has an unpaid status
-                        $order = Order::where('session_id', $session->id)->where('status', OrderStatus::UNPAID)->first();
+                        $order = Order::where('session_id', $session->id)->where('status', OrderStatusEnum::UNPAID)->first();
                         if (!$order) {
                             throw new NotFoundHttpException;
                         }
-                        $order['status'] = OrderStatus::PAID; // Updating the status to true
+                        $order['status'] = OrderStatusEnum::PAID; // Updating the status to true
                         $order['receipt_url'] = $charge->receipt_url; // Storing the receipt url for the customer
                         $order['customer_email'] = $session->customer_details->email; // Storing customer email
                         $order['customer_name'] = $session->customer_details->name; // Storing customer name
                         $order->save();
 
-                        // Extracting registration plates from the array of js objects from the user's order
-                        $plates = array();
-                        foreach (json_decode($order['registration_plates']) as $registration_plate) {
-                            $plates[] = $registration_plate->registration_plates;
-                        }
+                        $user = $order->user; // Getting the user reference from the order model relation
 
-                        // Freeing the user's reserved parking stalls after the successful payment (avoiding n+1 problem by using whereIn instead of where inside a loop)
-                        ParkingSpace::whereIn('registration_plates', $plates)->update([
+                        // Getting the registration plates from the order
+                        $order_registration_plates = collect(json_decode($order->registration_plates))->pluck('registration_plates');
+                        // Getting the paid parking spaces in a query based on the registration plates
+                        $order_parking_spaces = ParkingSpace::whereIn('registration_plates', $order_registration_plates);
+
+                        // Firing an event for each reserved stall that will create a record in the database about the freed stall by a user (when they drive out)
+                        $order_parking_spaces->get()->each(function ($parking_space) use ($user) {
+                            event(new ParkingActionRecorded(
+                                $user->id,
+                                $parking_space->id,
+                                ParkingRecordActionEnum::DRIVE_OUT,
+                                $parking_space->registration_plates,
+                            ));
+                        });
+
+                        // Freeing the user's reserved parking stalls after the successful payment
+                        $order_parking_spaces->update([
                             'available' => true,
                             'registration_plates' => null,
                             'user_id' => null,
@@ -245,13 +229,12 @@ class Stall extends Controller
                         ]);
 
                         // If the user doesn't have any reserved parking spaces but has irrelevant pending checkout sessions, delete them
-                        $user = $order->user;
-                        if (!$user->parking_spaces->count()) {
-                            Order::where('status', OrderStatus::UNPAID)->where('user_id', $user->id)->delete();
+                        if (!$user->parking_spaces()->exists()) {
+                            Order::where('status', OrderStatusEnum::UNPAID)->where('user_id', $user->id)->delete();
                         }
 
                         // Sending the receipt to the email of the user in case if they didn't receive it from stripe
-                        Mail::to($user->email)->send(
+                        Mail::to($user->email)->queue(
                             new \App\Mail\PaymentSucceeded($order)
                         );
                     } catch (\Exception $e) {

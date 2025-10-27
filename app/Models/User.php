@@ -22,6 +22,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'is_admin',
         'password',
     ];
 
@@ -54,5 +55,9 @@ class User extends Authenticatable
 
     public function orders(): HasMany {
         return $this->hasMany(Order::class);
+    }
+
+    public function records(): HasMany {
+        return $this->hasMany(Record::class);
     }
 }

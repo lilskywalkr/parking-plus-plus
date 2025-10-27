@@ -27,7 +27,7 @@ class ParkingAuth extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Parking Auth',
+            subject: 'ParkingController Auth',
         );
     }
 

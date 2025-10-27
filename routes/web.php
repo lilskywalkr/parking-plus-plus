@@ -11,3 +11,5 @@ require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
 require __DIR__.'/parking.php';
 require __DIR__.'/stall.php';
+require __DIR__.'/record.php';
+require __DIR__.'/statistics.php';

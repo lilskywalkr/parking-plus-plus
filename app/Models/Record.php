@@ -5,20 +5,20 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class ParkingSpace extends Model
+class Record extends Model
 {
-    /** @use HasFactory<\Database\Factories\ParkingSpaceFactory> */
+    /** @use HasFactory<\Database\Factories\RecordFactory> */
     use HasFactory;
 
     protected $guarded = [];
+
 
     public function user(): BelongsTo {
         return $this->belongsTo(User::class);
     }
 
-    public function records(): HasMany {
-        return $this->hasMany(Record::class);
-    }
+    /*public function parking_space(): BelongsTo {
+        return $this->belongsTo(ParkingSpace::class);
+    }*/
 }

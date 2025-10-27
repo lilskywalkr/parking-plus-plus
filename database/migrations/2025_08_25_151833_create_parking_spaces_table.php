@@ -14,7 +14,7 @@ return new class extends Migration
     {
         Schema::create('parking_spaces', function (Blueprint $table) {
             $table->id();
-            $table->string('available');
+            $table->boolean('available');
             $table->foreignIdFor(\App\Models\User::class)->nullable();
             $table->string('registration_plates')->nullable();
             $table->dateTime('drive_in')->nullable();

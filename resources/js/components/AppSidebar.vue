@@ -3,12 +3,17 @@
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
-import { type NavItem } from '@/types';
+import { type Auth, type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import { SquareParking, LandPlot } from 'lucide-vue-next';
+import { SquareParking, LandPlot, ChartNoAxesCombined, CalendarRange } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
+import { usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
-const mainNavItems: NavItem[] = [
+const page = usePage();
+const auth = computed(() => page.props.auth as Auth);
+
+const mainNavItemsUser: NavItem[] = [
     {
         title: 'Parking',
         href: '/parking',
@@ -18,7 +23,25 @@ const mainNavItems: NavItem[] = [
         title: 'Your Stalls',
         href: '/stall',
         icon: LandPlot,
-    }
+    },
+];
+
+const mainNavItemsAdmin: NavItem[] = [
+    {
+        title: 'Parking',
+        href: '/parking',
+        icon: SquareParking,
+    },
+    {
+        title: 'Statistics',
+        href: '/statistics',
+        icon: ChartNoAxesCombined,
+    },
+    {
+        title: 'Record',
+        href: '/record',
+        icon: CalendarRange,
+    },
 ];
 
 // const footerNavItems: NavItem[] = [
@@ -46,17 +69,16 @@ const mainNavItems: NavItem[] = [
                         </Link>
                     </SidebarMenuButton>
                 </SidebarMenuItem>
-
-
             </SidebarMenu>
         </SidebarHeader>
 
         <SidebarContent>
-            <NavMain :items="mainNavItems" />
+            <NavMain :items="mainNavItemsAdmin" v-if="auth.user.is_admin" />
+            <NavMain :items="mainNavItemsUser" v-else />
         </SidebarContent>
 
         <SidebarFooter>
-<!--            <NavFooter :items="footerNavItems" />-->
+            <!--            <NavFooter :items="footerNavItems" />-->
             <NavUser />
         </SidebarFooter>
     </Sidebar>

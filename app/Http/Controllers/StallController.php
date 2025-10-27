@@ -148,7 +148,7 @@ class StallController extends Controller
     }
 
     public function cancel(Request $request) {
-        $stripe = new \Stripe\StripeClient(env('STRIPE_SECRET_KEY'));
+        /*$stripe = new \Stripe\StripeClient(env('STRIPE_SECRET_KEY'));
 
         $session_id = $request->get('session_id');
 
@@ -160,7 +160,7 @@ class StallController extends Controller
             }
         } catch (\Exception $e) {
             throw new NotFoundHttpException;
-        }
+        }*/
 
         return Inertia::render('stall/CheckoutCancel', []);
     }

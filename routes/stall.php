@@ -18,5 +18,5 @@ Route::get('/stall/checkout/cancel', [App\Http\Controllers\StallController::clas
     ->middleware(['auth', 'verified', 'user'])
     ->name('stall.checkout.cancel');
 
-Route::post('/webhook', [App\Http\Controllers\StallController::class, 'webhook'])
-    ->name('webhook');
+Route::post('/stripe/webhook', [App\Http\Controllers\StallController::class, 'webhook'])
+    ->name('stripe.webhook');

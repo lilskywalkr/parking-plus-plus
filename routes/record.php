@@ -7,6 +7,6 @@ Route::get('/record', [RecordController::class, 'index'])
     ->middleware(['auth', 'verified', 'admin'])
     ->name('record');
 
-Route::get('/search', [RecordController::class, 'search'])
+Route::get('/record/filter', [RecordController::class, 'filter'])
     ->middleware(['auth', 'verified', 'admin'])
-    ->name('record.search');
+    ->name('record.filter');

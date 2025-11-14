@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { type BreadcrumbItem, RecordPagination } from '@/types';
+import { type BreadcrumbItem, RecordPagination, Record } from '@/types';
 import { Head, Link, Form } from '@inertiajs/vue3';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuGroup,
     DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
@@ -11,13 +12,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
     ChevronLeft, ChevronRight, ChevronsUpDown,
-    LoaderCircle, Search, CalendarArrowDown,
+    LoaderCircle, Rocket, CalendarArrowDown,
     CalendarArrowUp, ClockArrowDown, ClockArrowUp,
     ArrowDownAZ, ArrowUpAZ, ArrowUp01, ArrowDown01,
 } from 'lucide-vue-next';
 import { recordsArrayInsertSort } from '@/lib/utils';
 import InputError from '@/components/InputError.vue';
 import { usePage } from '@inertiajs/vue3';
+import { onMounted, ref, watch } from 'vue';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -32,31 +34,75 @@ const props = defineProps<{
 
 const page = usePage();
 
-const sortedRecordsData = recordsArrayInsertSort(1, props.records.data, 'parking_space_id');
-console.log("Sorted array", sortedRecordsData);
+// This is for rendering the sorted records
+const recordsData = ref<Record[]>(props.records.data);
+const selectedSortOption = ref<{label: string, direction: number}>({label: '', direction: 0});
+const serverSorting = ref<boolean>(false);
+
+// This function handles the record sorting the sorting options is chosen
+function handleRecordSorting(sortingOption: keyof Record, direction: number) {
+    if (!sortingOption || !direction) {
+        console.log('Invalid sorting option or direction cannot sort the records');
+    }
+
+    // Sorting the records and saving them in the variable
+    recordsData.value = recordsArrayInsertSort(direction, props.records.data, sortingOption);
+
+    // Saving the sorting option in the session storage
+    if (window) {
+        window.sessionStorage.setItem('sorting_option', sortingOption);
+        window.sessionStorage.setItem('direction', JSON.stringify(direction));
+    }
+
+    // Save the sorting options (label and direction) in a variable
+    selectedSortOption.value.label = sortingOption;
+    selectedSortOption.value.direction = direction;
+}
+
+// The records table's column labels
+const tableFieldLabels = ['Date', 'Time', 'User', 'Action', 'Stall ID', 'Car plates'];
 
 // Select menu's options
 const selectOptions = [
     [
-        { text: 'By date asc', icon: CalendarArrowUp },
-        { text: 'By date desc', icon: CalendarArrowDown },
+        { text: 'By date asc', icon: CalendarArrowUp, sorting_label: 'date', direction: 1},
+        { text: 'By date desc', icon: CalendarArrowDown, sorting_label: 'date', direction: -1 },
     ],
     [
-        { text: 'By time asc', icon: ClockArrowUp },
-        { text: 'By time desc', icon: ClockArrowDown },
+        { text: 'By time asc', icon: ClockArrowUp, sorting_label: 'time', direction: 1 },
+        { text: 'By time desc', icon: ClockArrowDown, sorting_label: 'time', direction: -1 },
     ],
     [
-        { text: 'By username asc', icon: ArrowUpAZ },
-        { text: 'By username desc', icon: ArrowDownAZ },
+        { text: 'By user asc', icon: ArrowUpAZ, sorting_label: 'user', direction: 1 },
+        { text: 'By user desc', icon: ArrowDownAZ, sorting_label: 'user', direction: -1 },
     ],
     [
-        { text: 'By stall number asc', icon: ArrowUp01 },
-        { text: 'By stall number desc', icon: ArrowDown01 }
-    ]
+        { text: 'By stall id asc', icon: ArrowUp01, sorting_label: 'parking_space_id', direction: 1 },
+        { text: 'By stall id desc', icon: ArrowDown01, sorting_label: 'parking_space_id', direction: -1 },
+    ],
+    [
+        {text: 'By car plates asc', icon: ArrowUpAZ, sorting_label: 'registration_plates', direction: 1 },
+        {text: 'By car plates desc', icon: ArrowDownAZ, sorting_label: 'registration_plates', direction: -1 },
+    ],
 ];
 
-// The records table's column labels
-const tableFieldLabels = ['Date', 'Time', 'User', 'Action', 'Stall', 'Car plates'];
+onMounted(() => {
+    // If the user previously chose a sorting option then sort the records based on it
+    if (window.sessionStorage.getItem('sorting_option') && window.sessionStorage.getItem('direction')) {
+        const sortingOption = window.sessionStorage.getItem('sorting_option');  // get the sorting option
+        const direction = window.sessionStorage.getItem('direction');   // get the sorting direction
+
+        // Sorting the records
+        recordsData.value = recordsArrayInsertSort(Number(direction), props.records.data, sortingOption as keyof Record);
+
+        selectedSortOption.value.label = sortingOption as string;    // save the sorting option label in the variable
+        selectedSortOption.value.direction = Number(direction);   // save the sorting option direction in the variable
+    }
+})
+
+watch(serverSorting, (newValue) => {
+   console.log("Checkbox selected: ", newValue);
+});
 
 console.log("Records", props.records);
 </script>
@@ -77,20 +123,20 @@ console.log("Records", props.records);
 
             <!-- Rendering table's records with the data from the props -->
             <div
-                v-for="record in records.data"
+                v-for="record in recordsData"
                 :key="record.id"
                 class="grid w-full grid-cols-6 grid-rows-1 items-center gap-1 border-b border-solid max-sm:w-2xl"
             >
                 <div>
-                    <p>{{ new Date(record.created_at).toLocaleDateString() }}</p>
+                    <p>{{ record.date }}</p>
                 </div>
 
                 <div>
-                    <p>{{ new Date(record.created_at).toLocaleTimeString() }}</p>
+                    <p>{{ record.time }}</p>
                 </div>
 
                 <div>
-                    <p :class="record.user.is_admin ? 'underline' : ''">{{ record.user.name }}</p>
+                    <p :class="record.action === 'blocked' || record.action === 'unblocked' ? 'underline' : ''">{{ record.user }}</p>
                 </div>
 
                 <div>
@@ -110,11 +156,11 @@ console.log("Records", props.records);
         <!-- Simple pagination -->
         <div class="my-4 flex w-full items-center justify-center gap-2 px-2 max-sm:justify-start">
             <!-- Rendering previous button -->
-            <component :is="records.prev_page_url ? Link : 'div'" v-bind="records.prev_page_url ? { href: records.prev_page_url } : {}">
+            <component :is="records.links.prev ? Link : 'div'" v-bind="records.links.prev ? { href: records.links.prev } : {}">
                 <Button
                     type="button"
-                    :variant="records.prev_page_url ? 'outline' : 'secondary'"
-                    :class="records.prev_page_url ? 'cursor-pointer' : ''"
+                    :variant="records.links.prev ? 'outline' : 'secondary'"
+                    :class="records.links.prev ? 'cursor-pointer' : ''"
                 >
                     <ChevronLeft />
                     <p class="max-sm:hidden">Previous</p>
@@ -122,11 +168,11 @@ console.log("Records", props.records);
             </component>
 
             <!-- Rendering next button -->
-            <component :is="records.next_page_url ? Link : 'div'" v-bind="records.next_page_url ? { href: records.next_page_url } : {}">
+            <component :is="records.links.next ? Link : 'div'" v-bind="records.links.next ? { href: records.links.next } : {}">
                 <Button
                     type="button"
-                    :variant="records.next_page_url ? 'outline' : 'secondary'"
-                    :class="records.next_page_url ? 'cursor-pointer' : ''"
+                    :variant="records.links.next ? 'outline' : 'secondary'"
+                    :class="records.links.next ? 'cursor-pointer' : ''"
                 >
                     <p class="max-sm:hidden">Next</p>
                     <ChevronRight />
@@ -134,17 +180,15 @@ console.log("Records", props.records);
             </component>
 
             <!-- Sorting and filtering -->
-            <Form class="flex gap-2" :action="route('record.search')" method="get" v-slot="{ processing }">
+            <Form id="records-form" class="flex gap-2" :action="route('record.filter')" method="get" v-slot="{ processing }">
                 <!-- Search field (which is technically a filter) -->
                 <div class="flex flex-col">
                     <Input type="search" name="q" placeholder="Search" minlength="1" maxlength="255" />
+                    <Input type="hidden" name="option" :value="serverSorting && selectedSortOption.label" />
+                    <Input type="hidden" name="direction" :value="serverSorting && selectedSortOption.direction" />
+
                     <InputError :message="page.props.errors.q" />
                 </div>
-
-                <Button type="submit" class="cursor-pointer" :disabled="processing">
-                    <LoaderCircle v-if="processing" class="h-4 w-4 animate-spin" />
-                    <Search v-else />
-                </Button>
 
                 <!-- Sorting selection menu -->
                 <DropdownMenu>
@@ -160,17 +204,23 @@ console.log("Records", props.records);
                     <DropdownMenuContent align="end" class="w-56">
                         <!-- Menu label -->
                         <DropdownMenuLabel class="p-0 font-normal">
-                            <div class="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                                <p>Select sorting option</p>
+                            <div class="flex items-center gap-2 px-3 py-1.5 text-left text-sm justify-between">
+                                <p>Apply for all the pages</p>
+                                <Checkbox v-model="serverSorting"></Checkbox>
                             </div>
                         </DropdownMenuLabel>
 
                         <DropdownMenuSeparator />
 
                         <!-- Rendering the options -->
-                        <DropdownMenuGroup v-for="(options, i) in selectOptions" :key="i">
+                        <DropdownMenuGroup v-for="(options, i) in selectOptions" :key="i" >
                             <DropdownMenuItem :as-child="true" v-for="(option, j) in options" :key="j">
-                                <Button variant="ghost" class="flex w-full justify-between">
+                                <Button
+                                    :variant="selectedSortOption.label === option.sorting_label && selectedSortOption.direction === option.direction ?  'secondary' : 'ghost'"
+                                    class="flex w-full justify-between"
+                                    @click="handleRecordSorting(option.sorting_label as keyof Record, option.direction)"
+                                    type="button"
+                                >
                                     {{ option.text }}
                                     <component :is="option.icon" />
                                 </Button>
@@ -180,6 +230,11 @@ console.log("Records", props.records);
                         </DropdownMenuGroup>
                     </DropdownMenuContent>
                 </DropdownMenu>
+
+                <Button type="submit" class="cursor-pointer" :disabled="processing">
+                    <LoaderCircle v-if="processing" class="h-4 w-4 animate-spin" />
+                    <Rocket v-else />
+                </Button>
             </Form>
         </div>
     </AppLayout>

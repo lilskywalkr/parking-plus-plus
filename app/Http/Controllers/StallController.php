@@ -5,11 +5,13 @@ namespace App\Http\Controllers;
 use App\Enums\OrderStatusEnum;
 use App\Enums\ParkingRecordActionEnum;
 use App\Events\ParkingActionRecorded;
+use App\Http\Resources\OrderViewResource;
 use App\Jobs\CreateOrderJob;
 use App\Mail\PaymentSucceeded;
 use App\Models\Order;
 use App\Models\ParkingSpace;
 use App\Models\User;
+use App\Services\StripeCheckoutService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -61,12 +63,26 @@ class StallController extends Controller
                 throw new NotFoundHttpException;
             }
         } catch (\Exception $e) {
+            Log::error('Error occurred at checkout');
+            Log::error($e);
             throw new NotFoundHttpException;
         }
 
         $user_registration_plates = $user_reserved_stalls->select('registration_plates')->toJson(); // Selecting registered cars' registration plates
 
-        // create a new checkout session
+        // If an unpaid checkout session is present in the db for the user's registration plates
+        if ( Order::where('status', OrderStatusEnum::OPEN)->where('registration_plates', $user_registration_plates)->exists() ) {
+            // Getting the session id of the unpaid checkout
+            $checkout_session_id = Order::where('status', OrderStatusEnum::OPEN)->where('registration_plates', $user_registration_plates)->first()->session_id;
+            $checkout_session = $stripe->checkout->sessions->retrieve($checkout_session_id); // Retrieving the session based on the session id
+
+            // If the session is still open on stripe (the session has not expired) then redirect the user to the session
+            if ($checkout_session['status'] === OrderStatusEnum::OPEN->value) {
+                return redirect($checkout_session->url);
+            };
+        }
+
+        // create a new checkout session if there is no open checkout for the user's registration plates
         $line_items = [];
         $total_price = 0;
 
@@ -107,7 +123,7 @@ class StallController extends Controller
                 'name' => 'auto'
             ],
             'success_url' => route('stall.checkout.success', [], true)."?session_id={CHECKOUT_SESSION_ID}",
-            'cancel_url' => route('stall.checkout.cancel', [], true),
+            'cancel_url' => route('stall.checkout.cancel', [], true)."?session_id={CHECKOUT_SESSION_ID}",
         ]);
 
         // Creating a new order for the current checkout order unto the database via a job (queue)
@@ -116,52 +132,16 @@ class StallController extends Controller
         return redirect($checkout_session->url);
     }
 
-    public function success(Request $request) {
-        $stripe = new \Stripe\StripeClient(env('STRIPE_SECRET_KEY'));
-
-        $session_id = $request->get('session_id');
-
-        try {
-            $session = $stripe->checkout->sessions->retrieve($session_id);
-
-            if (!$session) {
-                throw new NotFoundHttpException;
-            }
-
-            // Getting the order which was not displayed on the success page for the user's payment summary
-            $order = Order::where('status', OrderStatusEnum::PAID)->where('session_id', $session['id'])->where('payment_summarized', false)->first();
-            if (!$order) {
-                throw new NotFoundHttpException; // If the summary was displayed by the user then return an exception
-            }
-            $order['payment_summarized'] = true;
-            $order->save();
-
-        } catch (\Exception $e) {
-            throw new NotFoundHttpException;
-        }
-
-        $customer = $stripe->customers->retrieve($session->customer);
+    public function success(Request $request, StripeCheckoutService $service) {
+        // Calling the service method that will update the order record and return customer and order information
+        $order =  $service->summarizeCheckout($request->get('session_id'));
 
         return Inertia::render('stall/CheckoutSuccess', [
-            'customer' => $customer->toArray(),
+            'order' => new OrderViewResource($order), // passing an order resource class as a prop
         ]);
     }
 
     public function cancel(Request $request) {
-        /*$stripe = new \Stripe\StripeClient(env('STRIPE_SECRET_KEY'));
-
-        $session_id = $request->get('session_id');
-
-        try {
-            $session = $stripe->checkout->sessions->retrieve($session_id);
-
-            if (!$session) {
-                throw new NotFoundHttpException;
-            }
-        } catch (\Exception $e) {
-            throw new NotFoundHttpException;
-        }*/
-
         return Inertia::render('stall/CheckoutCancel', []);
     }
 
@@ -180,6 +160,11 @@ class StallController extends Controller
                 $payload, $sig_header, $endpoint_secret
             );
 
+            Log::info("===================");
+            Log::info("===================");
+            Log::info($event->type);
+            Log::info($event);
+
             // Handle the event
             switch ($event->type) {
                 case 'checkout.session.completed':
@@ -193,11 +178,13 @@ class StallController extends Controller
                         $charge = $stripe->charges->retrieve($charge_id, []); // Retrieving a specific charge object by id
 
                         // Getting the user's order which was paid but has an unpaid status
-                        $order = Order::where('session_id', $session->id)->where('status', OrderStatusEnum::UNPAID)->first();
+                        $order = Order::where('session_id', $session->id)->where('status', OrderStatusEnum::OPEN)->first();
                         if (!$order) {
+                            Log::error("The order was not found in the db");
                             throw new NotFoundHttpException;
                         }
-                        $order['status'] = OrderStatusEnum::PAID; // Updating the status to true
+
+                        $order['status'] = OrderStatusEnum::COMPLETE; // Updating the status to true
                         $order['receipt_url'] = $charge->receipt_url; // Storing the receipt url for the customer
                         $order['customer_email'] = $session->customer_details->email; // Storing customer email
                         $order['customer_name'] = $session->customer_details->name; // Storing customer name
@@ -230,12 +217,12 @@ class StallController extends Controller
 
                         // If the user doesn't have any reserved parking spaces but has irrelevant pending checkout sessions, delete them
                         if (!$user->parking_spaces()->exists()) {
-                            Order::where('status', OrderStatusEnum::UNPAID)->where('user_id', $user->id)->delete();
+                            Order::where('status', OrderStatusEnum::OPEN)->where('user_id', $user->id)->delete();
                         }
 
                         // Sending the receipt to the email of the user in case if they didn't receive it from stripe
                         Mail::to($user->email)->queue(
-                            new \App\Mail\PaymentSucceeded($order)
+                            new PaymentSucceeded($order)
                         );
                     } catch (\Exception $e) {
                         Log::error('Webhook processing failed at checkout.session.completed', [

@@ -47,26 +47,42 @@ export interface ParkingSpace {
 
 export interface Record {
     id: number;
-    user_id: number;
-    user: User;
+    user: string;
     parking_space_id: number;
-    parking_space?: ParkingSpace;
     registration_plates?: string | null;
     action: string;
-    created_at: string;
-    updated_at: string;
+    date: string;
+    time: string;
 }
 
 export interface RecordPagination {
-    current_page: number;
-    current_page_url: string;
     data: Record[];
-    first_page_url: string;
-    from: number;
-    next_page_url: string | null;
-    path: string;
-    per_page: number;
-    prev_page_url: string | null;
+    links: {
+        first: string | null;
+        last: string | null;
+        next: string | null;
+        prev: string | null;
+    },
+    meta: {
+        current_page: number;
+        current_page_url: string;
+        from: number,
+        path: string,
+        per_page: number,
+        to: number,
+    }
+}
+
+export interface Order {
+    id: number;
+    status: string;
+    registration_plates: string[];
+    total_price: number;
+    payment_summarized: boolean;
+    session_id: string;
+    customer_email: string;
+    customer_name: string;
+    created_at: number;
 }
 
 export type BreadcrumbItemType = BreadcrumbItem;

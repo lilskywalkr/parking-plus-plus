@@ -244,7 +244,7 @@ test('user sees not found error on the success page if they revisit the page wit
 
     // Simulating the payment by updating the order's fields
     Order::latest()->update([
-        'status' => \App\Enums\OrderStatusEnum::PAID,
+        'status' => \App\Enums\OrderStatusEnum::COMPLETE,
         'payment_summarized' => true, // If the success page was once visited this field is updated to true
 
     ]);
@@ -286,8 +286,7 @@ test('user sees the summary of their payment on the success page if the order wa
 
     // Simulating the payment by updating the order's fields
     Order::latest()->update([
-        'status' => \App\Enums\OrderStatusEnum::PAID,
-
+        'status' => \App\Enums\OrderStatusEnum::COMPLETE,
     ]);
 
     // Getting the session id from the order that was created in the checkout

@@ -6,6 +6,7 @@ use App\Enums\OrderStatusEnum;
 use App\Models\Order;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Log;
 
 class CreateOrderJob implements ShouldQueue
 {
@@ -26,14 +27,22 @@ class CreateOrderJob implements ShouldQueue
      */
     public function handle(): void
     {
-        $order = new Order();
+        try {
+            Log::info('CreateOrderJob job started');
+            $order = new Order();
 
-        $order['status'] = OrderStatusEnum::UNPAID;
-        $order['registration_plates'] = $this->registration_plates;
-        $order['total_price'] = $this->total_price;
-        $order['user_id'] = $this->user_id;
-        $order['session_id'] = $this->session_id;
+            $order['status'] = OrderStatusEnum::OPEN;
+            $order['registration_plates'] = $this->registration_plates;
+            $order['total_price'] = $this->total_price;
+            $order['user_id'] = $this->user_id;
+            $order['session_id'] = $this->session_id;
 
-        $order->save();
+            $order->save();
+
+            Log::info('CreateOrderJob job completed');
+        } catch (\Exception $e) {
+            Log::error('Error occurred at creating an order in CreateOrderJob job');
+            Log::error($e);
+        }
     }
 }

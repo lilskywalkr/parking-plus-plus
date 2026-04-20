@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\OrderStatusEnum;
 use App\Models\Order;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -26,12 +27,26 @@ class StripeCheckoutService
                 throw new NotFoundHttpException;
             }
 
-            // Getting the order which was not displayed on the success page for the user's payment summary
-            $order = Order::where('session_id', $session['id'])->where('status', OrderStatusEnum::COMPLETE)->where('payment_summarized', false)->first();
+            // Getting the order for the user's payment summary
+            $order = Order::where('session_id', $session['id'])->where('user_id', Auth::id())->first();
+
+            // If the order of the given session id does not exist
             if (!$order) {
-                Log::error("The summary has been already displayed");
-                throw new NotFoundHttpException; // If the summary was displayed by the user then return an exception
+                Log::error("Order not found");
+                throw new NotFoundHttpException;
             }
+
+            // If the summary was displayed by the user
+            if ($order['payment_summarized']) {
+                Log::error("The summary has been already displayed");
+                throw new NotFoundHttpException;
+            }
+
+            // If the order status is open mark it as complete
+            if ($order['status'] === OrderStatusEnum::OPEN->value) {
+                $order['status'] = OrderStatusEnum::COMPLETE->value;
+            }
+
             $order['payment_summarized'] = true;
             $order->save();
 

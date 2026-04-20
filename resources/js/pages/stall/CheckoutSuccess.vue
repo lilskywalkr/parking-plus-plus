@@ -9,7 +9,7 @@ console.log(props.order);
 </script>
 
 <template>
-    <h1>Your payment has been successfully credited</h1>
+    <h1>If you were redirected here then your payment was successfully credited. You will receive an email with the receipt url</h1>
     <h2><b>Payment details</b></h2>
 
     <div>

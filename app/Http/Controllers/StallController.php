@@ -184,7 +184,7 @@ class StallController extends Controller
                             throw new NotFoundHttpException;
                         }
 
-                        $order['status'] = OrderStatusEnum::COMPLETE; // Updating the status to true
+                        $order['status'] = OrderStatusEnum::COMPLETE; // Updating the status to 'complete'
                         $order['receipt_url'] = $charge->receipt_url; // Storing the receipt url for the customer
                         $order['customer_email'] = $session->customer_details->email; // Storing customer email
                         $order['customer_name'] = $session->customer_details->name; // Storing customer name

@@ -1,11 +1,6 @@
-Commands:
-- pnpm install
-- composer install
+Running:
 
-Before running check:
-- an sqlite db is present
-- env file is present and configured
-
-If everything is ok run:
-composer run dev
-
+-Check for .env file
+-Check if the db is present
+-npm install
+-composer run dev
